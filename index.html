@@ -709,7 +709,7 @@
 
         <div class="footer">
             <p>Simple Chat App - For testing purposes only</p>
-            <p><i class="fas fa-shield-alt me-1"></i> Messages are processed locally and not stored on any server</p>
+            <p><i class="fas fa-shield-alt me-1"></i> Messages are processed securely through TalkJS</p>
         </div>
     </div>
 
@@ -721,25 +721,17 @@
             const chatScreen = document.getElementById('chat-screen');
             const usernameInput = document.getElementById('username');
             const joinBtn = document.getElementById('join-btn');
-            const messageInput = document.getElementById('message-input');
-            const sendBtn = document.getElementById('send-btn');
-            const chatMessages = document.getElementById('chat-messages');
             const onlineCount = document.getElementById('online-count');
             
             // Chat variables
             let username = '';
             let userId = '';
-            let socket = null;
-            let connectedUsers = new Set();
             
             // Join chat button click
             joinBtn.addEventListener('click', function() {
                 username = usernameInput.value.trim();
                 if (username) {
                     userId = 'user_' + Date.now();
-                    
-                    // Connect to WebSocket server
-                    connectToChat();
                     
                     // Switch to chat screen with animation
                     loginScreen.classList.add('animate__animated', 'animate__fadeOutUp');
@@ -758,18 +750,9 @@
                             origin: { y: 0.6 }
                         });
                         
-                        // Focus on message input
-                        messageInput.focus();
+                        // Connect to chat after UI transition
+                        connectToChat();
                     }, 500);
-                    
-                    // Enable send button when message input has text
-                    messageInput.addEventListener('input', function() {
-                        sendBtn.disabled = messageInput.value.trim() === '';
-                        if (!sendBtn.disabled) {
-                            sendBtn.classList.add('animate__animated', 'animate__pulse');
-                            setTimeout(() => sendBtn.classList.remove('animate__animated', 'animate__pulse'), 500);
-                        }
-                    });
                 } else {
                     // Shake the input if empty
                     usernameInput.classList.add('animate__animated', 'animate__shakeX');
@@ -815,6 +798,10 @@
                     // Create and mount the chatbox
                     const chatbox = talkSession.createChatbox(conversation);
                     chatbox.mount(document.getElementById("talkjs-container"));
+                    
+                    // Update online indicator
+                    document.querySelector('.online-dot').style.backgroundColor = '#10b981';
+                    document.getElementById('online-count').textContent = 'Connected';
                     
                     // Add system message
                     addSystemMessage(`Connected! You joined the chat as ${username}`);
@@ -1014,11 +1001,28 @@
             
             // Add a system message
             function addSystemMessage(text) {
-                const messageElement = document.createElement('div');
-                messageElement.className = 'message system animate__animated animate__fadeInUp';
+                console.log("System message:", text);
                 
-                const date = new Date();
-                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                // Create a temporary div to show system messages if needed
+                if (!document.getElementById('system-messages')) {
+                    const systemMessages = document.createElement('div');
+                    systemMessages.id = 'system-messages';
+                    systemMessages.style.position = 'fixed';
+                    systemMessages.style.bottom = '20px';
+                    systemMessages.style.right = '20px';
+                    systemMessages.style.zIndex = '1000';
+                    document.body.appendChild(systemMessages);
+                }
+                
+                const messageElement = document.createElement('div');
+                messageElement.className = 'system-message animate__animated animate__fadeIn';
+                messageElement.style.backgroundColor = 'rgba(99, 102, 241, 0.9)';
+                messageElement.style.color = 'white';
+                messageElement.style.padding = '10px 15px';
+                messageElement.style.borderRadius = '8px';
+                messageElement.style.marginTop = '10px';
+                messageElement.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+                messageElement.style.maxWidth = '300px';
                 
                 // Check if the message is about a user joining
                 const isJoinMessage = text.includes('joined the chat');
@@ -1028,24 +1032,24 @@
                 let iconClass = 'fas fa-info-circle';
                 if (isJoinMessage) iconClass = 'fas fa-user-plus';
                 else if (isConnectedMessage) iconClass = 'fas fa-plug';
-                else if (isErrorMessage) iconClass = 'fas fa-exclamation-triangle';
+                else if (isErrorMessage) {
+                    iconClass = 'fas fa-exclamation-triangle';
+                    messageElement.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
+                }
                 
                 messageElement.innerHTML = `
-                    <div class="message-content">
-                        <i class="${iconClass} me-2"></i>${text}
-                    </div>
-                    <div class="message-info">
-                        <span class="message-time">${timeString}</span>
-                    </div>
+                    <i class="${iconClass} me-2"></i>${text}
                 `;
                 
-                chatMessages.appendChild(messageElement);
+                document.getElementById('system-messages').appendChild(messageElement);
                 
-                // Scroll to bottom with smooth animation
-                chatMessages.scrollTo({
-                    top: chatMessages.scrollHeight,
-                    behavior: 'smooth'
-                });
+                // Remove after 5 seconds
+                setTimeout(() => {
+                    messageElement.classList.add('animate__fadeOut');
+                    setTimeout(() => {
+                        messageElement.remove();
+                    }, 500);
+                }, 5000);
             }
             
             // Update online users count
