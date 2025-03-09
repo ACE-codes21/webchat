@@ -14,6 +14,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Animate.css for animations -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <!-- Scaledrone for real-time messaging -->
+    <script src='https://cdn.scaledrone.com/scaledrone.min.js'></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -616,203 +618,130 @@
             
             // Connect to WebSocket chat server
             function connectToChat() {
-                // Try multiple WebSocket servers in order of preference
-                const servers = [
-                    'wss://socketsbay.com/wss/v2/1/demo/',
-                    'wss://ws.postman-echo.com/raw',
-                    'wss://echo.websocket.org'
-                ];
+                // Use Scaledrone - a free WebSocket service designed for chat applications
+                const CHANNEL_ID = 'JyQpVqwE8nF5IgGl'; // Free demo channel ID
                 
-                let serverIndex = 0;
-                let connectionAttempts = 0;
-                const maxAttempts = 3;
+                addSystemMessage(`Connecting to chat server...`);
                 
-                // Try to connect to a server
-                tryConnect();
-                
-                function tryConnect() {
-                    if (serverIndex >= servers.length) {
-                        // All servers failed, switch to local-only mode
-                        switchToLocalMode();
-                        return;
-                    }
+                try {
+                    // Create a new Scaledrone connection
+                    const drone = new Scaledrone(CHANNEL_ID, {
+                        data: {
+                            name: username,
+                            id: userId
+                        }
+                    });
                     
-                    if (connectionAttempts >= maxAttempts) {
-                        // Too many attempts on current server, try next one
-                        serverIndex++;
-                        connectionAttempts = 0;
-                        tryConnect();
-                        return;
-                    }
-                    
-                    connectionAttempts++;
-                    const serverUrl = servers[serverIndex];
-                    
-                    // Show connecting message
-                    addSystemMessage(`Connecting to chat server... (Attempt ${connectionAttempts})`);
-                    
-                    // Create WebSocket connection
-                    try {
-                        socket = new WebSocket(serverUrl);
+                    // Handle connection open
+                    drone.on('open', error => {
+                        if (error) {
+                            console.error('Error connecting to Scaledrone:', error);
+                            switchToLocalMode();
+                            return;
+                        }
                         
-                        // Set connection timeout
-                        const connectionTimeout = setTimeout(() => {
-                            if (socket.readyState !== WebSocket.OPEN) {
-                                socket.close();
-                                tryConnect(); // Try again or next server
+                        // Store the actual user ID assigned by Scaledrone
+                        userId = drone.clientId;
+                        
+                        // Add system message
+                        addSystemMessage(`Connected! You joined the chat as ${username}`);
+                        
+                        // Update online count (will be updated by members event)
+                        connectedUsers.add(userId);
+                        updateOnlineCount();
+                        
+                        // Subscribe to a room
+                        const room = drone.subscribe('observable-room');
+                        
+                        // Handle room open event
+                        room.on('open', error => {
+                            if (error) {
+                                console.error('Error opening room:', error);
                             }
-                        }, 5000); // 5 second timeout
+                        });
                         
-                        socket.onopen = function() {
-                            clearTimeout(connectionTimeout);
-                            console.log('Connected to chat server:', serverUrl);
-                            
-                            // Send a join message
-                            const joinMessage = {
-                                type: 'join',
-                                userId: userId,
-                                username: username,
-                                timestamp: Date.now()
-                            };
-                            socket.send(JSON.stringify(joinMessage));
-                            
-                            // Add system message
-                            addSystemMessage(`Connected! You joined the chat as ${username}`);
-                            
-                            // Update online count
-                            connectedUsers.add(userId);
+                        // Handle members event (list of users currently in the room)
+                        room.on('members', members => {
+                            // Update connected users
+                            connectedUsers = new Set(members.map(member => member.id));
                             updateOnlineCount();
-                            
-                            // Set up ping to keep connection alive
-                            startPingInterval();
-                        };
+                        });
                         
-                        socket.onmessage = function(event) {
-                            try {
-                                const data = JSON.parse(event.data);
-                                
-                                // Handle different message types
-                                switch(data.type) {
-                                    case 'join':
-                                        if (data.userId !== userId) {
-                                            addSystemMessage(`${data.username} joined the chat`);
-                                            connectedUsers.add(data.userId);
-                                            updateOnlineCount();
-                                        }
-                                        break;
-                                        
-                                    case 'leave':
-                                        if (data.userId !== userId) {
-                                            addSystemMessage(`${data.username} left the chat`);
-                                            connectedUsers.delete(data.userId);
-                                            updateOnlineCount();
-                                        }
-                                        break;
-                                        
-                                    case 'message':
-                                        displayMessage(data);
-                                        break;
-                                        
-                                    case 'ping':
-                                        // Respond to ping with pong
-                                        socket.send(JSON.stringify({type: 'pong', timestamp: Date.now()}));
-                                        break;
-                                        
-                                    default:
-                                        // For demo purposes, treat any message as a chat message
-                                        // This is because the echo server doesn't parse our JSON
-                                        if (event.data && typeof event.data === 'string') {
-                                            try {
-                                                const messageData = JSON.parse(event.data);
-                                                if (messageData.type === 'message' && messageData.userId !== userId) {
-                                                    displayMessage(messageData);
-                                                }
-                                            } catch (e) {
-                                                // Not our JSON format, ignore
-                                            }
-                                        }
-                                }
-                            } catch (e) {
-                                console.log('Received non-JSON message:', event.data);
+                        // Handle member join event
+                        room.on('member_join', member => {
+                            if (member.id !== userId) {
+                                addSystemMessage(`${member.clientData.name} joined the chat`);
+                                connectedUsers.add(member.id);
+                                updateOnlineCount();
                             }
-                        };
+                        });
                         
-                        socket.onclose = function(event) {
-                            clearTimeout(connectionTimeout);
-                            stopPingInterval();
-                            
-                            console.log('WebSocket closed with code:', event.code);
-                            
-                            if (event.wasClean) {
-                                addSystemMessage('Disconnected from chat server. Please refresh the page to reconnect.');
-                            } else {
-                                // Connection error or abrupt close, try to reconnect
-                                tryConnect();
+                        // Handle member leave event
+                        room.on('member_leave', member => {
+                            if (member.id !== userId) {
+                                addSystemMessage(`${member.clientData.name} left the chat`);
+                                connectedUsers.delete(member.id);
+                                updateOnlineCount();
                             }
-                        };
+                        });
                         
-                        socket.onerror = function(error) {
-                            clearTimeout(connectionTimeout);
-                            console.error('WebSocket error:', error);
-                            // Error will trigger onclose event, which will handle reconnection
-                        };
-                        
-                    } catch (error) {
-                        console.error('Error creating WebSocket:', error);
-                        tryConnect(); // Try again or next server
-                    }
-                }
-                
-                // Switch to local-only mode when all servers fail
-                function switchToLocalMode() {
-                    addSystemMessage('Could not connect to any chat server. Running in local-only mode.');
+                        // Handle incoming messages
+                        room.on('message', message => {
+                            // Skip messages from ourselves (we already display those when sent)
+                            if (message.clientId === userId) {
+                                return;
+                            }
+                            
+                            const data = message.data;
+                            if (data.type === 'message') {
+                                displayMessage({
+                                    type: 'message',
+                                    text: data.text,
+                                    userId: message.clientId,
+                                    username: message.member.clientData.name,
+                                    timestamp: data.timestamp
+                                });
+                            }
+                        });
+                    });
                     
-                    // Create a fake socket object that just echoes messages locally
+                    // Handle connection error
+                    drone.on('error', error => {
+                        console.error('Scaledrone error:', error);
+                        switchToLocalMode();
+                    });
+                    
+                    // Handle connection close
+                    drone.on('close', event => {
+                        console.log('Scaledrone connection closed:', event);
+                        addSystemMessage('Disconnected from chat server. Please refresh the page to reconnect.');
+                    });
+                    
+                    // Store the drone object for sending messages
                     socket = {
                         readyState: WebSocket.OPEN,
-                        send: function(message) {
+                        send: function(messageStr) {
                             try {
-                                const data = JSON.parse(message);
-                                
-                                // Only handle message type in local mode
-                                if (data.type === 'message') {
-                                    // Add a small delay to simulate network
-                                    setTimeout(() => {
-                                        displayMessage(data);
-                                    }, 100);
+                                const message = JSON.parse(messageStr);
+                                if (message.type === 'message') {
+                                    // Publish message to the room
+                                    drone.publish({
+                                        room: 'observable-room',
+                                        message: message
+                                    });
                                 }
                             } catch (e) {
-                                console.error('Error parsing message in local mode:', e);
+                                console.error('Error sending message:', e);
                             }
                         },
                         close: function() {
-                            // Do nothing
+                            drone.close();
                         }
                     };
                     
-                    // Add the current user
-                    connectedUsers.add(userId);
-                    updateOnlineCount();
-                }
-                
-                // Keep connection alive with ping
-                let pingInterval;
-                
-                function startPingInterval() {
-                    pingInterval = setInterval(() => {
-                        if (socket.readyState === WebSocket.OPEN) {
-                            socket.send(JSON.stringify({
-                                type: 'ping',
-                                timestamp: Date.now()
-                            }));
-                        }
-                    }, 30000); // Send ping every 30 seconds
-                }
-                
-                function stopPingInterval() {
-                    if (pingInterval) {
-                        clearInterval(pingInterval);
-                    }
+                } catch (error) {
+                    console.error('Error creating Scaledrone connection:', error);
+                    switchToLocalMode();
                 }
             }
             
