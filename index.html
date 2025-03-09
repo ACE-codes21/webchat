@@ -616,84 +616,204 @@
             
             // Connect to WebSocket chat server
             function connectToChat() {
-                // Using a free WebSocket echo server for demo purposes
-                // In a real app, you would use your own WebSocket server
-                socket = new WebSocket('wss://socketsbay.com/wss/v2/1/demo/');
+                // Try multiple WebSocket servers in order of preference
+                const servers = [
+                    'wss://socketsbay.com/wss/v2/1/demo/',
+                    'wss://ws.postman-echo.com/raw',
+                    'wss://echo.websocket.org'
+                ];
                 
-                socket.onopen = function() {
-                    console.log('Connected to chat server');
+                let serverIndex = 0;
+                let connectionAttempts = 0;
+                const maxAttempts = 3;
+                
+                // Try to connect to a server
+                tryConnect();
+                
+                function tryConnect() {
+                    if (serverIndex >= servers.length) {
+                        // All servers failed, switch to local-only mode
+                        switchToLocalMode();
+                        return;
+                    }
                     
-                    // Send a join message
-                    const joinMessage = {
-                        type: 'join',
-                        userId: userId,
-                        username: username,
-                        timestamp: Date.now()
+                    if (connectionAttempts >= maxAttempts) {
+                        // Too many attempts on current server, try next one
+                        serverIndex++;
+                        connectionAttempts = 0;
+                        tryConnect();
+                        return;
+                    }
+                    
+                    connectionAttempts++;
+                    const serverUrl = servers[serverIndex];
+                    
+                    // Show connecting message
+                    addSystemMessage(`Connecting to chat server... (Attempt ${connectionAttempts})`);
+                    
+                    // Create WebSocket connection
+                    try {
+                        socket = new WebSocket(serverUrl);
+                        
+                        // Set connection timeout
+                        const connectionTimeout = setTimeout(() => {
+                            if (socket.readyState !== WebSocket.OPEN) {
+                                socket.close();
+                                tryConnect(); // Try again or next server
+                            }
+                        }, 5000); // 5 second timeout
+                        
+                        socket.onopen = function() {
+                            clearTimeout(connectionTimeout);
+                            console.log('Connected to chat server:', serverUrl);
+                            
+                            // Send a join message
+                            const joinMessage = {
+                                type: 'join',
+                                userId: userId,
+                                username: username,
+                                timestamp: Date.now()
+                            };
+                            socket.send(JSON.stringify(joinMessage));
+                            
+                            // Add system message
+                            addSystemMessage(`Connected! You joined the chat as ${username}`);
+                            
+                            // Update online count
+                            connectedUsers.add(userId);
+                            updateOnlineCount();
+                            
+                            // Set up ping to keep connection alive
+                            startPingInterval();
+                        };
+                        
+                        socket.onmessage = function(event) {
+                            try {
+                                const data = JSON.parse(event.data);
+                                
+                                // Handle different message types
+                                switch(data.type) {
+                                    case 'join':
+                                        if (data.userId !== userId) {
+                                            addSystemMessage(`${data.username} joined the chat`);
+                                            connectedUsers.add(data.userId);
+                                            updateOnlineCount();
+                                        }
+                                        break;
+                                        
+                                    case 'leave':
+                                        if (data.userId !== userId) {
+                                            addSystemMessage(`${data.username} left the chat`);
+                                            connectedUsers.delete(data.userId);
+                                            updateOnlineCount();
+                                        }
+                                        break;
+                                        
+                                    case 'message':
+                                        displayMessage(data);
+                                        break;
+                                        
+                                    case 'ping':
+                                        // Respond to ping with pong
+                                        socket.send(JSON.stringify({type: 'pong', timestamp: Date.now()}));
+                                        break;
+                                        
+                                    default:
+                                        // For demo purposes, treat any message as a chat message
+                                        // This is because the echo server doesn't parse our JSON
+                                        if (event.data && typeof event.data === 'string') {
+                                            try {
+                                                const messageData = JSON.parse(event.data);
+                                                if (messageData.type === 'message' && messageData.userId !== userId) {
+                                                    displayMessage(messageData);
+                                                }
+                                            } catch (e) {
+                                                // Not our JSON format, ignore
+                                            }
+                                        }
+                                }
+                            } catch (e) {
+                                console.log('Received non-JSON message:', event.data);
+                            }
+                        };
+                        
+                        socket.onclose = function(event) {
+                            clearTimeout(connectionTimeout);
+                            stopPingInterval();
+                            
+                            console.log('WebSocket closed with code:', event.code);
+                            
+                            if (event.wasClean) {
+                                addSystemMessage('Disconnected from chat server. Please refresh the page to reconnect.');
+                            } else {
+                                // Connection error or abrupt close, try to reconnect
+                                tryConnect();
+                            }
+                        };
+                        
+                        socket.onerror = function(error) {
+                            clearTimeout(connectionTimeout);
+                            console.error('WebSocket error:', error);
+                            // Error will trigger onclose event, which will handle reconnection
+                        };
+                        
+                    } catch (error) {
+                        console.error('Error creating WebSocket:', error);
+                        tryConnect(); // Try again or next server
+                    }
+                }
+                
+                // Switch to local-only mode when all servers fail
+                function switchToLocalMode() {
+                    addSystemMessage('Could not connect to any chat server. Running in local-only mode.');
+                    
+                    // Create a fake socket object that just echoes messages locally
+                    socket = {
+                        readyState: WebSocket.OPEN,
+                        send: function(message) {
+                            try {
+                                const data = JSON.parse(message);
+                                
+                                // Only handle message type in local mode
+                                if (data.type === 'message') {
+                                    // Add a small delay to simulate network
+                                    setTimeout(() => {
+                                        displayMessage(data);
+                                    }, 100);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing message in local mode:', e);
+                            }
+                        },
+                        close: function() {
+                            // Do nothing
+                        }
                     };
-                    socket.send(JSON.stringify(joinMessage));
                     
-                    // Add system message
-                    addSystemMessage(`You joined the chat as ${username}`);
-                    
-                    // Update online count
+                    // Add the current user
                     connectedUsers.add(userId);
                     updateOnlineCount();
-                };
+                }
                 
-                socket.onmessage = function(event) {
-                    try {
-                        const data = JSON.parse(event.data);
-                        
-                        // Handle different message types
-                        switch(data.type) {
-                            case 'join':
-                                if (data.userId !== userId) {
-                                    addSystemMessage(`${data.username} joined the chat`);
-                                    connectedUsers.add(data.userId);
-                                    updateOnlineCount();
-                                }
-                                break;
-                                
-                            case 'leave':
-                                if (data.userId !== userId) {
-                                    addSystemMessage(`${data.username} left the chat`);
-                                    connectedUsers.delete(data.userId);
-                                    updateOnlineCount();
-                                }
-                                break;
-                                
-                            case 'message':
-                                displayMessage(data);
-                                break;
-                                
-                            default:
-                                // For demo purposes, treat any message as a chat message
-                                // This is because the echo server doesn't parse our JSON
-                                if (event.data && typeof event.data === 'string') {
-                                    try {
-                                        const messageData = JSON.parse(event.data);
-                                        if (messageData.type === 'message' && messageData.userId !== userId) {
-                                            displayMessage(messageData);
-                                        }
-                                    } catch (e) {
-                                        // Not our JSON format, ignore
-                                    }
-                                }
+                // Keep connection alive with ping
+                let pingInterval;
+                
+                function startPingInterval() {
+                    pingInterval = setInterval(() => {
+                        if (socket.readyState === WebSocket.OPEN) {
+                            socket.send(JSON.stringify({
+                                type: 'ping',
+                                timestamp: Date.now()
+                            }));
                         }
-                    } catch (e) {
-                        console.log('Received non-JSON message:', event.data);
+                    }, 30000); // Send ping every 30 seconds
+                }
+                
+                function stopPingInterval() {
+                    if (pingInterval) {
+                        clearInterval(pingInterval);
                     }
-                };
-                
-                socket.onclose = function() {
-                    console.log('Disconnected from chat server');
-                    addSystemMessage('Disconnected from chat server. Please refresh the page to reconnect.');
-                };
-                
-                socket.onerror = function(error) {
-                    console.error('WebSocket error:', error);
-                    addSystemMessage('Error connecting to chat server. Please try again later.');
-                };
+                }
             }
             
             // Send message button click
