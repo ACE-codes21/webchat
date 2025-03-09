@@ -721,7 +721,6 @@
             const chatScreen = document.getElementById('chat-screen');
             const usernameInput = document.getElementById('username');
             const joinBtn = document.getElementById('join-btn');
-            const onlineCount = document.getElementById('online-count');
             
             // Chat variables
             let username = '';
@@ -767,7 +766,60 @@
                 }
             });
             
-            // Connect to WebSocket chat server
+            // Add a system message
+            function addSystemMessage(text) {
+                console.log("System message:", text);
+                
+                // Create a temporary div to show system messages if needed
+                if (!document.getElementById('system-messages')) {
+                    const systemMessages = document.createElement('div');
+                    systemMessages.id = 'system-messages';
+                    systemMessages.style.position = 'fixed';
+                    systemMessages.style.bottom = '20px';
+                    systemMessages.style.right = '20px';
+                    systemMessages.style.zIndex = '1000';
+                    document.body.appendChild(systemMessages);
+                }
+                
+                const messageElement = document.createElement('div');
+                messageElement.className = 'system-message animate__animated animate__fadeIn';
+                messageElement.style.backgroundColor = 'rgba(99, 102, 241, 0.9)';
+                messageElement.style.color = 'white';
+                messageElement.style.padding = '10px 15px';
+                messageElement.style.borderRadius = '8px';
+                messageElement.style.marginTop = '10px';
+                messageElement.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+                messageElement.style.maxWidth = '300px';
+                
+                // Check if the message is about a user joining
+                const isJoinMessage = text.includes('joined the chat');
+                const isConnectedMessage = text.includes('Connected!');
+                const isErrorMessage = text.includes('error') || text.includes('Error') || text.includes('failed') || text.includes('⚠️');
+                
+                let iconClass = 'fas fa-info-circle';
+                if (isJoinMessage) iconClass = 'fas fa-user-plus';
+                else if (isConnectedMessage) iconClass = 'fas fa-plug';
+                else if (isErrorMessage) {
+                    iconClass = 'fas fa-exclamation-triangle';
+                    messageElement.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
+                }
+                
+                messageElement.innerHTML = `
+                    <i class="${iconClass} me-2"></i>${text}
+                `;
+                
+                document.getElementById('system-messages').appendChild(messageElement);
+                
+                // Remove after 5 seconds
+                setTimeout(() => {
+                    messageElement.classList.add('animate__fadeOut');
+                    setTimeout(() => {
+                        messageElement.remove();
+                    }, 500);
+                }, 5000);
+            }
+            
+            // Connect to chat
             function connectToChat() {
                 addSystemMessage(`Setting up chat...`);
                 
@@ -916,166 +968,6 @@
                 }, 500);
             }
             
-            // Send message button click
-            sendBtn.addEventListener('click', sendMessage);
-            
-            // Send message on Enter key
-            messageInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter' && messageInput.value.trim() !== '') {
-                    sendMessage();
-                }
-            });
-            
-            // Send a message
-            function sendMessage() {
-                const messageText = messageInput.value.trim();
-                if (messageText && socket && socket.readyState === WebSocket.OPEN) {
-                    // Add a subtle animation to the send button
-                    sendBtn.classList.add('animate__animated', 'animate__bounceIn');
-                    setTimeout(() => sendBtn.classList.remove('animate__animated', 'animate__bounceIn'), 500);
-                    
-                    const message = {
-                        type: 'message',
-                        text: messageText,
-                        userId: userId,
-                        username: username,
-                        timestamp: Date.now()
-                    };
-                    
-                    // Send message to server
-                    socket.send(JSON.stringify(message));
-                    
-                    // Display message locally
-                    displayMessage(message);
-                    
-                    // Clear input
-                    messageInput.value = '';
-                    sendBtn.disabled = true;
-                    
-                    // Focus on input again
-                    messageInput.focus();
-                }
-            }
-            
-            // Display a message in the chat
-            function displayMessage(message) {
-                const messageElement = document.createElement('div');
-                messageElement.className = 'message ' + (message.userId === userId ? 'sent' : 'received');
-                
-                const date = new Date(message.timestamp);
-                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                // Add animation classes based on message type
-                if (message.userId === userId) {
-                    messageElement.classList.add('animate__animated', 'animate__fadeInRight');
-                } else {
-                    messageElement.classList.add('animate__animated', 'animate__fadeInLeft');
-                }
-                
-                messageElement.innerHTML = `
-                    <div class="message-content">${escapeHtml(message.text)}</div>
-                    <div class="message-info">
-                        ${message.userId !== userId ? `<span class="message-author">${escapeHtml(message.username)}</span> • ` : ''}
-                        <span class="message-time">${timeString}</span>
-                    </div>
-                `;
-                
-                chatMessages.appendChild(messageElement);
-                
-                // Scroll to bottom with smooth animation
-                chatMessages.scrollTo({
-                    top: chatMessages.scrollHeight,
-                    behavior: 'smooth'
-                });
-                
-                // Play a subtle sound for new messages
-                if (message.userId !== userId) {
-                    playMessageSound();
-                }
-                
-                // Add a subtle animation to the message after it's added
-                setTimeout(() => {
-                    messageElement.classList.add('message-visible');
-                }, 100);
-            }
-            
-            // Add a system message
-            function addSystemMessage(text) {
-                console.log("System message:", text);
-                
-                // Create a temporary div to show system messages if needed
-                if (!document.getElementById('system-messages')) {
-                    const systemMessages = document.createElement('div');
-                    systemMessages.id = 'system-messages';
-                    systemMessages.style.position = 'fixed';
-                    systemMessages.style.bottom = '20px';
-                    systemMessages.style.right = '20px';
-                    systemMessages.style.zIndex = '1000';
-                    document.body.appendChild(systemMessages);
-                }
-                
-                const messageElement = document.createElement('div');
-                messageElement.className = 'system-message animate__animated animate__fadeIn';
-                messageElement.style.backgroundColor = 'rgba(99, 102, 241, 0.9)';
-                messageElement.style.color = 'white';
-                messageElement.style.padding = '10px 15px';
-                messageElement.style.borderRadius = '8px';
-                messageElement.style.marginTop = '10px';
-                messageElement.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
-                messageElement.style.maxWidth = '300px';
-                
-                // Check if the message is about a user joining
-                const isJoinMessage = text.includes('joined the chat');
-                const isConnectedMessage = text.includes('Connected!');
-                const isErrorMessage = text.includes('error') || text.includes('Error') || text.includes('failed') || text.includes('⚠️');
-                
-                let iconClass = 'fas fa-info-circle';
-                if (isJoinMessage) iconClass = 'fas fa-user-plus';
-                else if (isConnectedMessage) iconClass = 'fas fa-plug';
-                else if (isErrorMessage) {
-                    iconClass = 'fas fa-exclamation-triangle';
-                    messageElement.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
-                }
-                
-                messageElement.innerHTML = `
-                    <i class="${iconClass} me-2"></i>${text}
-                `;
-                
-                document.getElementById('system-messages').appendChild(messageElement);
-                
-                // Remove after 5 seconds
-                setTimeout(() => {
-                    messageElement.classList.add('animate__fadeOut');
-                    setTimeout(() => {
-                        messageElement.remove();
-                    }, 500);
-                }, 5000);
-            }
-            
-            // Update online users count
-            function updateOnlineCount() {
-                const count = connectedUsers.size;
-                onlineCount.textContent = count + (count === 1 ? ' person' : ' people') + ' online';
-            }
-            
-            // Play a subtle sound for new messages
-            function playMessageSound() {
-                // This is a simple way to create a notification sound
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.type = 'sine';
-                oscillator.frequency.value = 600;
-                gainNode.gain.value = 0.1;
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.start();
-                oscillator.stop(audioContext.currentTime + 0.1);
-            }
-            
             // Escape HTML to prevent XSS
             function escapeHtml(unsafe) {
                 return unsafe
@@ -1085,19 +977,6 @@
                     .replace(/"/g, "&quot;")
                     .replace(/'/g, "&#039;");
             }
-            
-            // Handle window close/refresh
-            window.addEventListener('beforeunload', function() {
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    const leaveMessage = {
-                        type: 'leave',
-                        userId: userId,
-                        username: username,
-                        timestamp: Date.now()
-                    };
-                    socket.send(JSON.stringify(leaveMessage));
-                }
-            });
             
             // Add a welcome message
             setTimeout(() => {
