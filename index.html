@@ -24,6 +24,13 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <!-- Add confetti effect -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <!-- TalkJS -->
+    <script>
+        (function(t,a,l,k,j,s){
+        s=a.createElement('script');s.async=1;s.src="https://cdn.talkjs.com/talk.js";a.head.appendChild(s)
+        ;k=t.Promise;t.Talk={v:3,ready:{then:function(f){if(k)return new k(function(r,e){l.push([f,r,e])});l
+        .push([f])},catch:function(){return k&&new k()},c:l}};})(window,document,[]);
+    </script>
     <style>
         :root {
             --primary: #6366f1;
@@ -693,18 +700,11 @@
                 <h2><i class="fas fa-comments"></i>Chat Room</h2>
                 <div class="online-indicator">
                     <div class="online-dot"></div>
-                    <span id="online-count">0 online</span>
+                    <span id="online-count">Online</span>
                 </div>
             </div>
-            <div id="chat-messages" class="chat-messages">
-                <!-- Messages will be added here dynamically -->
-            </div>
-            <div class="chat-input">
-                <input type="text" id="message-input" placeholder="Type a message...">
-                <button id="send-btn" class="btn-send" disabled>
-                    <i class="fas fa-paper-plane"></i>
-                </button>
-            </div>
+            <!-- TalkJS chat container -->
+            <div id="talkjs-container" style="width: 100%; height: 500px; flex-grow: 1;"></div>
         </div>
 
         <div class="footer">
@@ -786,198 +786,147 @@
             
             // Connect to WebSocket chat server
             function connectToChat() {
-                addSystemMessage(`Connecting to chat server...`);
+                addSystemMessage(`Setting up chat...`);
                 
-                // Initialize Firebase with a public test project
-                // This is a public test project for demo purposes
-                const firebaseConfig = {
-                    apiKey: "AIzaSyAuUVMfGRnxpwPZ6ESA-cKSrXLwI9RQcBM",
-                    authDomain: "simple-chat-demo-7c728.firebaseapp.com",
-                    databaseURL: "https://simple-chat-demo-7c728-default-rtdb.firebaseio.com",
-                    projectId: "simple-chat-demo-7c728",
-                    storageBucket: "simple-chat-demo-7c728.appspot.com",
-                    messagingSenderId: "945014435798",
-                    appId: "1:945014435798:web:0a8b9c6b0e9d3e9c9a9d3e"
-                };
-                
-                try {
-                    // Initialize Firebase
-                    firebase.initializeApp(firebaseConfig);
-                    
-                    // Get a reference to the database service
-                    const database = firebase.database();
-                    
-                    // Generate a unique room ID based on the current date (all users will join the same room)
-                    // This ensures all users connecting today will be in the same chat room
-                    const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-                    const roomId = `chat_room_${today}`;
-                    
-                    // Reference to the messages in this room
-                    const messagesRef = database.ref(`rooms/${roomId}/messages`);
-                    
-                    // Reference to online users in this room
-                    const onlineUsersRef = database.ref(`rooms/${roomId}/users`);
-                    
-                    // Add this user to the online users list
-                    const userRef = onlineUsersRef.child(userId);
-                    userRef.set({
+                // Initialize TalkJS
+                Talk.ready.then(function() {
+                    // Create the current user
+                    const me = new Talk.User({
+                        id: userId,
                         name: username,
-                        lastActive: firebase.database.ServerValue.TIMESTAMP
+                        email: `${userId}@example.com`,
+                        photoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`,
+                        welcomeMessage: `Hi, I'm ${username}!`
                     });
                     
-                    // Remove user when they disconnect
-                    userRef.onDisconnect().remove();
+                    // Create a talk session
+                    window.talkSession = new Talk.Session({
+                        appId: 'tLXBbKTp', // Demo app ID - works for testing
+                        me: me
+                    });
+                    
+                    // Create a chat room
+                    const conversation = talkSession.getOrCreateConversation("PUBLIC_CHAT_ROOM");
+                    conversation.setParticipant(me);
+                    conversation.setAttributes({
+                        subject: "Public Chat Room"
+                    });
+                    
+                    // Create and mount the chatbox
+                    const chatbox = talkSession.createChatbox(conversation);
+                    chatbox.mount(document.getElementById("talkjs-container"));
                     
                     // Add system message
                     addSystemMessage(`Connected! You joined the chat as ${username}`);
                     
-                    // Listen for new messages
-                    messagesRef.on('child_added', snapshot => {
-                        const message = snapshot.val();
-                        
-                        // Don't display our own messages again (we already show them when sent)
-                        if (message.userId === userId) {
-                            return;
-                        }
-                        
-                        displayMessage({
-                            type: 'message',
-                            text: message.text,
-                            userId: message.userId,
-                            username: message.username,
-                            timestamp: message.timestamp
-                        });
+                    // Trigger confetti effect for successful connection
+                    confetti({
+                        particleCount: 100,
+                        spread: 70,
+                        origin: { y: 0.6 }
                     });
-                    
-                    // Listen for users joining/leaving
-                    onlineUsersRef.on('value', snapshot => {
-                        // Clear current users
-                        const previousUsers = new Set(connectedUsers);
-                        connectedUsers = new Set();
-                        
-                        // Add all online users
-                        if (snapshot.exists()) {
-                            snapshot.forEach(userSnapshot => {
-                                const userKey = userSnapshot.key;
-                                connectedUsers.add(userKey);
-                                
-                                // Check if this is a new user (not in previous users set and not current user)
-                                if (!previousUsers.has(userKey) && userKey !== userId) {
-                                    const userData = userSnapshot.val();
-                                    addSystemMessage(`${userData.name} joined the chat`);
-                                }
-                            });
-                        }
-                        
-                        // Check for users who left
-                        previousUsers.forEach(prevUserKey => {
-                            if (!connectedUsers.has(prevUserKey) && prevUserKey !== userId) {
-                                // This user is no longer in the list
-                                addSystemMessage(`Someone left the chat`);
-                            }
-                        });
-                        
-                        // Always make sure current user is in the set
-                        connectedUsers.add(userId);
-                        
-                        // Update the count
-                        updateOnlineCount();
-                    });
-                    
-                    // Create a fake socket object that uses Firebase
-                    socket = {
-                        readyState: WebSocket.OPEN,
-                        send: function(messageStr) {
-                            try {
-                                const message = JSON.parse(messageStr);
-                                
-                                if (message.type === 'message') {
-                                    // Push message to Firebase
-                                    messagesRef.push({
-                                        type: 'message',
-                                        text: message.text,
-                                        userId: userId,
-                                        username: username,
-                                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                                    });
-                                }
-                            } catch (e) {
-                                console.error('Error sending message to Firebase:', e);
-                            }
-                        },
-                        close: function() {
-                            // Remove user from online users
-                            userRef.remove();
-                            
-                            // Detach all Firebase listeners
-                            messagesRef.off();
-                            onlineUsersRef.off();
-                        }
-                    };
-                    
-                    // Keep user's "last active" timestamp updated
-                    setInterval(() => {
-                        if (socket.readyState === WebSocket.OPEN) {
-                            userRef.update({
-                                lastActive: firebase.database.ServerValue.TIMESTAMP
-                            });
-                        }
-                    }, 30000); // Every 30 seconds
-                    
-                } catch (error) {
-                    console.error('Error connecting to Firebase:', error);
-                    addSystemMessage(`Connection error: ${error.message || 'Unknown error'}`);
+                }).catch(function(e) {
+                    console.error("Error setting up TalkJS", e);
+                    addSystemMessage(`Error connecting to chat service: ${e.message || 'Unknown error'}`);
                     switchToLocalMode();
-                }
+                });
             }
             
             // Switch to local-only mode when server connection fails
             function switchToLocalMode() {
-                addSystemMessage('⚠️ Running in local-only mode. Messages will only be visible on this device.');
+                addSystemMessage('⚠️ Running in local-only mode. Messages will only be visible to you.');
                 
                 // Add a visual indicator that we're in local mode
                 document.querySelector('.online-indicator').style.backgroundColor = '#ef4444';
                 document.querySelector('.online-dot').style.backgroundColor = '#ef4444';
                 document.querySelector('.online-indicator').innerHTML = '<div class="online-dot"></div><span>Local Mode</span>';
                 
-                // Create a fake socket object that just echoes messages locally
-                socket = {
-                    readyState: WebSocket.OPEN,
-                    send: function(messageStr) {
-                        try {
-                            // We already display our own messages when sent
-                            // No need to do anything here
-                        } catch (e) {
-                            console.error('Error in local mode:', e);
-                        }
-                    },
-                    close: function() {
-                        // Do nothing
-                    }
-                };
+                // Create a simple local chat interface
+                const talkjsContainer = document.getElementById('talkjs-container');
+                talkjsContainer.innerHTML = `
+                    <div class="local-chat">
+                        <div id="local-messages" class="chat-messages" style="height: 400px; overflow-y: auto; padding: 20px;"></div>
+                        <div class="chat-input" style="padding: 15px; display: flex; border-top: 1px solid #e5e7eb;">
+                            <input type="text" id="local-message-input" placeholder="Type a message..." style="flex-grow: 1; padding: 10px; border-radius: 20px; border: 1px solid #e5e7eb; margin-right: 10px;">
+                            <button id="local-send-btn" class="btn-send" style="width: 40px; height: 40px;">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
                 
-                // Add the current user
-                connectedUsers = new Set([userId]);
-                updateOnlineCount();
+                // Set up local messaging
+                const localMessages = document.getElementById('local-messages');
+                const localMessageInput = document.getElementById('local-message-input');
+                const localSendBtn = document.getElementById('local-send-btn');
                 
-                // Add a demo message to show it's working
-                setTimeout(() => {
-                    addSystemMessage('You can still type messages, but they will only be visible to you.');
+                // Function to add a message to the local chat
+                function addLocalMessage(message) {
+                    const messageElement = document.createElement('div');
+                    messageElement.className = 'message ' + (message.isMe ? 'sent' : 'received');
+                    messageElement.style.marginBottom = '15px';
+                    messageElement.style.display = 'flex';
+                    messageElement.style.flexDirection = 'column';
+                    messageElement.style.maxWidth = '80%';
+                    messageElement.style.alignSelf = message.isMe ? 'flex-end' : 'flex-start';
                     
-                    // Add a simulated user message after a delay
-                    setTimeout(() => {
-                        displayMessage({
-                            type: 'message',
-                            text: 'This is a demo message in local mode. Your chat is working, but only on this device.',
-                            userId: 'system',
-                            username: 'System',
-                            timestamp: Date.now()
+                    const date = new Date();
+                    const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    messageElement.innerHTML = `
+                        <div style="padding: 12px 16px; border-radius: 18px; background-color: ${message.isMe ? '#6366f1' : 'white'}; color: ${message.isMe ? 'white' : '#1f2937'}; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border: ${message.isMe ? 'none' : '1px solid #e5e7eb'};">
+                            ${message.text}
+                        </div>
+                        <div style="font-size: 0.75rem; margin-top: 5px; color: #6b7280;">
+                            ${message.isMe ? '' : message.sender + ' • '}${timeString}
+                        </div>
+                    `;
+                    
+                    localMessages.appendChild(messageElement);
+                    localMessages.scrollTop = localMessages.scrollHeight;
+                }
+                
+                // Send message function
+                function sendLocalMessage() {
+                    const text = localMessageInput.value.trim();
+                    if (text) {
+                        // Add user message
+                        addLocalMessage({
+                            text: text,
+                            isMe: true,
+                            sender: username
                         });
                         
-                        // Add instructions for sharing with friends
-                        addSystemMessage('To chat with friends, make sure both of you are using the same HTML file and have internet access.');
-                    }, 1500);
-                }, 1000);
+                        // Clear input
+                        localMessageInput.value = '';
+                        
+                        // Simulate a response after a short delay
+                        setTimeout(() => {
+                            addLocalMessage({
+                                text: "This is a local chat. Your messages are only visible to you.",
+                                isMe: false,
+                                sender: "System"
+                            });
+                        }, 1000);
+                    }
+                }
+                
+                // Set up event listeners
+                localSendBtn.addEventListener('click', sendLocalMessage);
+                localMessageInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendLocalMessage();
+                    }
+                });
+                
+                // Add welcome message
+                setTimeout(() => {
+                    addLocalMessage({
+                        text: "Welcome to local mode! Your messages will only be visible to you.",
+                        isMe: false,
+                        sender: "System"
+                    });
+                }, 500);
             }
             
             // Send message button click
