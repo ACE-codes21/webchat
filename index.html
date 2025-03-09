@@ -14,8 +14,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Animate.css for animations -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <!-- Add Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <!-- Scaledrone for real-time messaging -->
     <script src='https://cdn.scaledrone.com/scaledrone.min.js'></script>
+    <!-- Firebase App (the core Firebase SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <!-- Firebase Realtime Database -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- Add confetti effect -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -43,6 +51,15 @@
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --font-display: 'Poppins', var(--font-sans);
+            --border-radius-sm: 0.375rem;
+            --border-radius: 0.5rem;
+            --border-radius-md: 0.75rem;
+            --border-radius-lg: 1rem;
+            --border-radius-xl: 1.5rem;
+            --border-radius-2xl: 2rem;
+            --border-radius-full: 9999px;
         }
         
         * {
@@ -53,16 +70,18 @@
         
         body {
             background-color: var(--gray-100);
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font-sans);
             color: var(--gray-800);
             line-height: 1.6;
             height: 100vh;
             display: flex;
             flex-direction: column;
             background-image: 
-                radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 0% 0%, rgba(236, 72, 153, 0.1) 0%, transparent 50%);
+                radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 0% 0%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
+                linear-gradient(to bottom right, rgba(139, 92, 246, 0.05), rgba(16, 185, 129, 0.05));
             background-attachment: fixed;
+            overflow-x: hidden;
         }
         
         .main-container {
@@ -73,6 +92,8 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
+            position: relative;
+            z-index: 1;
         }
         
         .header {
@@ -80,20 +101,33 @@
             margin-bottom: 40px;
             color: var(--gray-800);
             position: relative;
+            animation: fadeIn 0.8s ease-out;
         }
         
         .header h1 {
-            font-family: 'Poppins', sans-serif;
+            font-family: var(--font-display);
             font-weight: 700;
             margin-bottom: 10px;
-            color: var(--primary-dark);
-            font-size: 2.75rem;
+            font-size: 3rem;
             letter-spacing: -0.025em;
-            background: linear-gradient(135deg, var(--primary-dark), var(--secondary));
+            background: linear-gradient(135deg, var(--primary-dark), var(--secondary), var(--accent));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             text-fill-color: transparent;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .header h1::after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 4px;
+            bottom: -8px;
+            left: 35%;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            border-radius: 2px;
         }
         
         .header .lead {
@@ -101,55 +135,61 @@
             font-size: 1.25rem;
             color: var(--gray-600);
             max-width: 600px;
-            margin: 0 auto;
-        }
-        
-        .header::after {
-            content: '';
-            display: block;
-            width: 80px;
-            height: 4px;
-            background: linear-gradient(to right, var(--primary), var(--secondary));
             margin: 20px auto 0;
-            border-radius: 2px;
+            line-height: 1.5;
         }
         
         .chat-container {
             background-color: white;
-            border-radius: 20px;
-            box-shadow: var(--shadow-xl);
+            border-radius: var(--border-radius-xl);
+            box-shadow: var(--shadow-xl), 0 25px 50px -12px rgba(99, 102, 241, 0.15);
             margin-bottom: 30px;
-            transition: all 0.4s ease;
-            border: 1px solid var(--gray-200);
+            transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+            border: 1px solid rgba(255, 255, 255, 0.8);
             flex-grow: 1;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             backdrop-filter: blur(10px);
             background-color: rgba(255, 255, 255, 0.95);
+            position: relative;
         }
         
         .chat-container:hover {
-            box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.25);
+            box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.25), 0 0 0 1px rgba(99, 102, 241, 0.1);
             transform: translateY(-5px);
         }
         
         .login-container {
             background-color: white;
-            border-radius: 20px;
+            border-radius: var(--border-radius-xl);
             padding: 40px;
-            box-shadow: var(--shadow-xl);
+            box-shadow: var(--shadow-xl), 0 25px 50px -12px rgba(99, 102, 241, 0.15);
             margin: auto;
             max-width: 500px;
-            transition: all 0.4s ease;
-            border: 1px solid var(--gray-200);
+            transition: all 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+            border: 1px solid rgba(255, 255, 255, 0.8);
             backdrop-filter: blur(10px);
             background-color: rgba(255, 255, 255, 0.95);
-            animation: fadeIn 0.6s ease-out;
+            animation: fadeIn 0.8s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .login-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(to right, var(--primary), var(--secondary), var(--accent));
+            border-top-left-radius: var(--border-radius-xl);
+            border-top-right-radius: var(--border-radius-xl);
         }
         
         .login-container:hover {
-            box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.25);
+            box-shadow: 0 25px 50px -12px rgba(99, 102, 241, 0.25), 0 0 0 1px rgba(99, 102, 241, 0.1);
             transform: translateY(-5px);
         }
         
@@ -157,12 +197,25 @@
             padding: 20px 25px;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
+            border-top-left-radius: var(--border-radius-xl);
+            border-top-right-radius: var(--border-radius-xl);
             display: flex;
             justify-content: space-between;
             align-items: center;
             box-shadow: var(--shadow-sm);
+            position: relative;
+            z-index: 2;
+        }
+        
+        .chat-header::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+            z-index: 1;
         }
         
         .chat-header h2 {
@@ -171,6 +224,7 @@
             font-weight: 600;
             display: flex;
             align-items: center;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
         
         .chat-header h2 i {
@@ -184,8 +238,10 @@
             font-size: 0.9rem;
             background-color: rgba(255, 255, 255, 0.15);
             padding: 6px 12px;
-            border-radius: 20px;
+            border-radius: var(--border-radius-full);
             backdrop-filter: blur(5px);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
         }
         
         .online-dot {
@@ -200,10 +256,10 @@
         .online-dot::after {
             content: '';
             position: absolute;
-            top: -2px;
-            left: -2px;
-            right: -2px;
-            bottom: -2px;
+            top: -4px;
+            left: -4px;
+            right: -4px;
+            bottom: -4px;
             background-color: var(--success);
             border-radius: 50%;
             opacity: 0.4;
@@ -216,11 +272,11 @@
                 opacity: 0.4;
             }
             70% {
-                transform: scale(1.5);
+                transform: scale(1.7);
                 opacity: 0;
             }
             100% {
-                transform: scale(1.5);
+                transform: scale(1.7);
                 opacity: 0;
             }
         }
@@ -233,24 +289,79 @@
             background-color: rgba(255, 255, 255, 0.8);
             background-image: 
                 radial-gradient(circle at 90% 10%, rgba(99, 102, 241, 0.03) 0%, transparent 30%),
-                radial-gradient(circle at 10% 90%, rgba(236, 72, 153, 0.03) 0%, transparent 30%);
+                radial-gradient(circle at 10% 90%, rgba(236, 72, 153, 0.03) 0%, transparent 30%),
+                url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            position: relative;
+            scroll-behavior: smooth;
+        }
+        
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+        }
+        
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
         }
         
         .message {
             margin-bottom: 20px;
             display: flex;
             flex-direction: column;
-            animation: fadeInUp 0.3s ease-out;
             max-width: 85%;
+            transition: all 0.3s ease;
+        }
+        
+        .message.sent {
+            align-items: flex-end;
+            align-self: flex-end;
+            animation: fadeInRight 0.5s ease-out;
+        }
+        
+        .message.received {
+            align-items: flex-start;
+            align-self: flex-start;
+            animation: fadeInLeft 0.5s ease-out;
+        }
+        
+        @keyframes fadeInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes fadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
         
         .message-content {
             padding: 14px 18px;
             border-radius: 18px;
             word-wrap: break-word;
-            box-shadow: var(--shadow-sm);
             position: relative;
             z-index: 1;
+            transition: all 0.3s ease;
         }
         
         .message-info {
@@ -259,34 +370,28 @@
             color: var(--gray-500);
             display: flex;
             align-items: center;
-        }
-        
-        .message.sent {
-            align-items: flex-end;
-            align-self: flex-end;
-        }
-        
-        .message.received {
-            align-items: flex-start;
-            align-self: flex-start;
+            padding: 0 5px;
         }
         
         .message.sent .message-content {
             background: linear-gradient(135deg, var(--primary), var(--primary-light));
             color: white;
             border-bottom-right-radius: 5px;
+            box-shadow: 0 2px 5px rgba(99, 102, 241, 0.2);
         }
         
         .message.received .message-content {
             background-color: white;
             color: var(--gray-800);
             border-bottom-left-radius: 5px;
-            box-shadow: var(--shadow);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--gray-200);
         }
         
         .message.system {
             align-self: center;
             max-width: 100%;
+            animation: fadeInUp 0.5s ease-out;
         }
         
         .message.system .message-content {
@@ -298,6 +403,7 @@
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.9rem;
+            text-align: center;
         }
         
         .chat-input {
@@ -307,6 +413,7 @@
             align-items: center;
             background-color: white;
             position: relative;
+            transition: all 0.3s ease;
         }
         
         .chat-input::before {
@@ -323,16 +430,17 @@
             flex-grow: 1;
             border: none;
             padding: 14px 18px;
-            border-radius: 25px;
+            border-radius: var(--border-radius-full);
             background-color: var(--gray-100);
             margin-right: 15px;
             font-size: 1rem;
             transition: all 0.3s;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .chat-input input:focus {
             outline: none;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0,0,0,0.05);
             background-color: white;
         }
         
@@ -349,11 +457,29 @@
             cursor: pointer;
             transition: all 0.3s;
             box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-send::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0));
+            transform: translateX(-100%);
+            transition: transform 0.6s;
         }
         
         .btn-send:hover {
             transform: scale(1.1) rotate(10deg);
             box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+        }
+        
+        .btn-send:hover::before {
+            transform: translateX(100%);
         }
         
         .btn-send:disabled {
@@ -363,17 +489,27 @@
             box-shadow: none;
         }
         
+        .btn-send i {
+            font-size: 1.2rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .btn-send:hover i {
+            transform: translateX(3px);
+        }
+        
         .btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             border: none;
-            padding: 12px 28px;
+            padding: 14px 28px;
             font-weight: 500;
-            border-radius: 12px;
+            border-radius: var(--border-radius-md);
             transition: all 0.3s;
             color: white;
             box-shadow: var(--shadow-md);
             position: relative;
             overflow: hidden;
+            letter-spacing: 0.5px;
         }
         
         .btn-primary::before {
@@ -397,18 +533,24 @@
             transform: translateX(100%);
         }
         
+        .btn-primary:active {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px -3px rgba(99, 102, 241, 0.4);
+        }
+        
         .form-control {
             padding: 14px 18px;
-            border-radius: 12px;
+            border-radius: var(--border-radius-md);
             border: 1px solid var(--gray-300);
             margin-bottom: 20px;
             font-size: 1rem;
             transition: all 0.3s;
             background-color: var(--gray-50);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .form-control:focus {
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0,0,0,0.05);
             border-color: var(--primary);
             background-color: white;
         }
@@ -418,6 +560,7 @@
             color: var(--gray-700);
             margin-bottom: 8px;
             display: block;
+            font-size: 0.95rem;
         }
         
         .footer {
@@ -427,6 +570,7 @@
             font-size: 14px;
             padding: 20px 0;
             border-top: 1px solid var(--gray-200);
+            background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.5));
         }
         
         .footer p {
@@ -538,6 +682,9 @@
             <button id="join-btn" class="btn btn-primary w-100">
                 <i class="fas fa-sign-in-alt me-2"></i>Join Chat
             </button>
+            <div class="text-center mt-4 text-muted">
+                <small>Join with your friends to start chatting!</small>
+            </div>
         </div>
 
         <!-- Chat Screen (initially hidden) -->
@@ -595,17 +742,38 @@
                     connectToChat();
                     
                     // Switch to chat screen with animation
-                    loginScreen.style.display = 'none';
-                    chatScreen.style.display = 'flex';
-                    chatScreen.classList.add('animate__animated', 'animate__fadeIn');
+                    loginScreen.classList.add('animate__animated', 'animate__fadeOutUp');
+                    loginScreen.style.animationDuration = '0.5s';
                     
-                    // Focus on message input
-                    messageInput.focus();
+                    setTimeout(() => {
+                        loginScreen.style.display = 'none';
+                        chatScreen.style.display = 'flex';
+                        chatScreen.classList.add('animate__animated', 'animate__fadeIn');
+                        chatScreen.style.animationDuration = '0.5s';
+                        
+                        // Trigger confetti effect
+                        confetti({
+                            particleCount: 100,
+                            spread: 70,
+                            origin: { y: 0.6 }
+                        });
+                        
+                        // Focus on message input
+                        messageInput.focus();
+                    }, 500);
                     
                     // Enable send button when message input has text
                     messageInput.addEventListener('input', function() {
                         sendBtn.disabled = messageInput.value.trim() === '';
+                        if (!sendBtn.disabled) {
+                            sendBtn.classList.add('animate__animated', 'animate__pulse');
+                            setTimeout(() => sendBtn.classList.remove('animate__animated', 'animate__pulse'), 500);
+                        }
                     });
+                } else {
+                    // Shake the input if empty
+                    usernameInput.classList.add('animate__animated', 'animate__shakeX');
+                    setTimeout(() => usernameInput.classList.remove('animate__animated', 'animate__shakeX'), 500);
                 }
             });
             
@@ -618,242 +786,148 @@
             
             // Connect to WebSocket chat server
             function connectToChat() {
-                // Try Scaledrone first, then fallback to direct WebSocket if needed
-                tryScaledrone();
+                addSystemMessage(`Connecting to chat server...`);
                 
-                // Try connecting with Scaledrone
-                function tryScaledrone() {
-                    // Using a different channel ID that should have less traffic
-                    const CHANNEL_ID = 'yiS12Ts5RdX3EWrr';
+                // Initialize Firebase with a public test project
+                // This is a public test project for demo purposes
+                const firebaseConfig = {
+                    apiKey: "AIzaSyAuUVMfGRnxpwPZ6ESA-cKSrXLwI9RQcBM",
+                    authDomain: "simple-chat-demo-7c728.firebaseapp.com",
+                    databaseURL: "https://simple-chat-demo-7c728-default-rtdb.firebaseio.com",
+                    projectId: "simple-chat-demo-7c728",
+                    storageBucket: "simple-chat-demo-7c728.appspot.com",
+                    messagingSenderId: "945014435798",
+                    appId: "1:945014435798:web:0a8b9c6b0e9d3e9c9a9d3e"
+                };
+                
+                try {
+                    // Initialize Firebase
+                    firebase.initializeApp(firebaseConfig);
                     
-                    addSystemMessage(`Connecting to chat server (Scaledrone)...`);
+                    // Get a reference to the database service
+                    const database = firebase.database();
                     
-                    // Set a connection timeout to prevent getting stuck
-                    const connectionTimeout = setTimeout(() => {
-                        addSystemMessage(`Scaledrone connection timed out. Trying direct WebSocket...`);
-                        tryDirectWebSocket();
-                    }, 8000); // 8 seconds timeout
+                    // Generate a unique room ID based on the current date (all users will join the same room)
+                    // This ensures all users connecting today will be in the same chat room
+                    const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+                    const roomId = `chat_room_${today}`;
                     
-                    try {
-                        // Create a new Scaledrone connection
-                        const drone = new Scaledrone(CHANNEL_ID, {
-                            data: {
-                                name: username,
-                                id: userId
+                    // Reference to the messages in this room
+                    const messagesRef = database.ref(`rooms/${roomId}/messages`);
+                    
+                    // Reference to online users in this room
+                    const onlineUsersRef = database.ref(`rooms/${roomId}/users`);
+                    
+                    // Add this user to the online users list
+                    const userRef = onlineUsersRef.child(userId);
+                    userRef.set({
+                        name: username,
+                        lastActive: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    
+                    // Remove user when they disconnect
+                    userRef.onDisconnect().remove();
+                    
+                    // Add system message
+                    addSystemMessage(`Connected! You joined the chat as ${username}`);
+                    
+                    // Listen for new messages
+                    messagesRef.on('child_added', snapshot => {
+                        const message = snapshot.val();
+                        
+                        // Don't display our own messages again (we already show them when sent)
+                        if (message.userId === userId) {
+                            return;
+                        }
+                        
+                        displayMessage({
+                            type: 'message',
+                            text: message.text,
+                            userId: message.userId,
+                            username: message.username,
+                            timestamp: message.timestamp
+                        });
+                    });
+                    
+                    // Listen for users joining/leaving
+                    onlineUsersRef.on('value', snapshot => {
+                        // Clear current users
+                        const previousUsers = new Set(connectedUsers);
+                        connectedUsers = new Set();
+                        
+                        // Add all online users
+                        if (snapshot.exists()) {
+                            snapshot.forEach(userSnapshot => {
+                                const userKey = userSnapshot.key;
+                                connectedUsers.add(userKey);
+                                
+                                // Check if this is a new user (not in previous users set and not current user)
+                                if (!previousUsers.has(userKey) && userKey !== userId) {
+                                    const userData = userSnapshot.val();
+                                    addSystemMessage(`${userData.name} joined the chat`);
+                                }
+                            });
+                        }
+                        
+                        // Check for users who left
+                        previousUsers.forEach(prevUserKey => {
+                            if (!connectedUsers.has(prevUserKey) && prevUserKey !== userId) {
+                                // This user is no longer in the list
+                                addSystemMessage(`Someone left the chat`);
                             }
                         });
                         
-                        // Handle connection open
-                        drone.on('open', error => {
-                            clearTimeout(connectionTimeout); // Clear the timeout
-                            
-                            if (error) {
-                                console.error('Error connecting to Scaledrone:', error);
-                                addSystemMessage(`Scaledrone error: ${error.message || 'Unknown error'}. Trying direct WebSocket...`);
-                                tryDirectWebSocket();
-                                return;
-                            }
-                            
-                            // Store the actual user ID assigned by Scaledrone
-                            userId = drone.clientId;
-                            
-                            // Add system message
-                            addSystemMessage(`Connected! You joined the chat as ${username}`);
-                            
-                            // Update online count (will be updated by members event)
-                            connectedUsers.add(userId);
-                            updateOnlineCount();
-                            
-                            // Subscribe to a room
-                            const room = drone.subscribe('observable-room');
-                            
-                            // Handle room open event
-                            room.on('open', error => {
-                                if (error) {
-                                    console.error('Error opening room:', error);
-                                    addSystemMessage(`Error opening chat room: ${error.message || 'Unknown error'}`);
-                                }
-                            });
-                            
-                            // Handle members event (list of users currently in the room)
-                            room.on('members', members => {
-                                // Update connected users
-                                connectedUsers = new Set(members.map(member => member.id));
-                                updateOnlineCount();
-                            });
-                            
-                            // Handle member join event
-                            room.on('member_join', member => {
-                                if (member.id !== userId) {
-                                    addSystemMessage(`${member.clientData?.name || 'Someone'} joined the chat`);
-                                    connectedUsers.add(member.id);
-                                    updateOnlineCount();
-                                }
-                            });
-                            
-                            // Handle member leave event
-                            room.on('member_leave', member => {
-                                if (member.id !== userId) {
-                                    addSystemMessage(`${member.clientData?.name || 'Someone'} left the chat`);
-                                    connectedUsers.delete(member.id);
-                                    updateOnlineCount();
-                                }
-                            });
-                            
-                            // Handle incoming messages
-                            room.on('message', message => {
-                                // Skip messages from ourselves (we already display those when sent)
-                                if (message.clientId === userId) {
-                                    return;
-                                }
+                        // Always make sure current user is in the set
+                        connectedUsers.add(userId);
+                        
+                        // Update the count
+                        updateOnlineCount();
+                    });
+                    
+                    // Create a fake socket object that uses Firebase
+                    socket = {
+                        readyState: WebSocket.OPEN,
+                        send: function(messageStr) {
+                            try {
+                                const message = JSON.parse(messageStr);
                                 
-                                const data = message.data;
-                                if (data && data.type === 'message') {
-                                    displayMessage({
+                                if (message.type === 'message') {
+                                    // Push message to Firebase
+                                    messagesRef.push({
                                         type: 'message',
-                                        text: data.text,
-                                        userId: message.clientId,
-                                        username: message.member?.clientData?.name || 'Unknown',
-                                        timestamp: data.timestamp || Date.now()
+                                        text: message.text,
+                                        userId: userId,
+                                        username: username,
+                                        timestamp: firebase.database.ServerValue.TIMESTAMP
                                     });
                                 }
-                            });
-                        });
-                        
-                        // Handle connection error
-                        drone.on('error', error => {
-                            clearTimeout(connectionTimeout); // Clear the timeout
-                            console.error('Scaledrone error:', error);
-                            addSystemMessage(`Scaledrone error: ${error.message || 'Unknown error'}. Trying direct WebSocket...`);
-                            tryDirectWebSocket();
-                        });
-                        
-                        // Handle connection close
-                        drone.on('close', event => {
-                            clearTimeout(connectionTimeout); // Clear the timeout
-                            console.log('Scaledrone connection closed:', event);
-                            addSystemMessage('Disconnected from chat server. Trying direct WebSocket...');
-                            tryDirectWebSocket();
-                        });
-                        
-                        // Store the drone object for sending messages
-                        socket = {
-                            readyState: WebSocket.OPEN,
-                            send: function(messageStr) {
-                                try {
-                                    const message = JSON.parse(messageStr);
-                                    if (message.type === 'message') {
-                                        // Publish message to the room
-                                        drone.publish({
-                                            room: 'observable-room',
-                                            message: message
-                                        });
-                                    }
-                                } catch (e) {
-                                    console.error('Error sending message:', e);
-                                }
-                            },
-                            close: function() {
-                                drone.close();
-                            }
-                        };
-                        
-                    } catch (error) {
-                        clearTimeout(connectionTimeout); // Clear the timeout
-                        console.error('Error creating Scaledrone connection:', error);
-                        addSystemMessage(`Scaledrone error: ${error.message || 'Unknown error'}. Trying direct WebSocket...`);
-                        tryDirectWebSocket();
-                    }
-                }
-                
-                // Try connecting with direct WebSocket
-                function tryDirectWebSocket() {
-                    // Try a more reliable WebSocket server
-                    const wsUrl = 'wss://demo.piesocket.com/v3/channel_123?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV&notify_self';
-                    
-                    addSystemMessage(`Connecting to chat server (Direct WebSocket)...`);
-                    
-                    // Set a connection timeout
-                    const connectionTimeout = setTimeout(() => {
-                        addSystemMessage(`Direct WebSocket connection timed out. Switching to local mode...`);
-                        switchToLocalMode();
-                    }, 8000); // 8 seconds timeout
-                    
-                    try {
-                        // Create WebSocket connection
-                        const ws = new WebSocket(wsUrl);
-                        
-                        ws.onopen = function() {
-                            clearTimeout(connectionTimeout);
-                            console.log('Connected to direct WebSocket server');
-                            
-                            // Send a join message
-                            const joinMessage = {
-                                type: 'join',
-                                userId: userId,
-                                username: username,
-                                timestamp: Date.now()
-                            };
-                            ws.send(JSON.stringify(joinMessage));
-                            
-                            // Add system message
-                            addSystemMessage(`Connected! You joined the chat as ${username}`);
-                            
-                            // Update online count
-                            connectedUsers.add(userId);
-                            updateOnlineCount();
-                        };
-                        
-                        ws.onmessage = function(event) {
-                            try {
-                                const data = JSON.parse(event.data);
-                                
-                                // Handle different message types
-                                if (data.type === 'message' && data.userId !== userId) {
-                                    displayMessage(data);
-                                } else if (data.type === 'join' && data.userId !== userId) {
-                                    addSystemMessage(`${data.username} joined the chat`);
-                                    connectedUsers.add(data.userId);
-                                    updateOnlineCount();
-                                } else if (data.type === 'leave' && data.userId !== userId) {
-                                    addSystemMessage(`${data.username} left the chat`);
-                                    connectedUsers.delete(data.userId);
-                                    updateOnlineCount();
-                                }
                             } catch (e) {
-                                console.log('Received non-JSON message:', event.data);
+                                console.error('Error sending message to Firebase:', e);
                             }
-                        };
-                        
-                        ws.onclose = function(event) {
-                            clearTimeout(connectionTimeout);
-                            console.log('WebSocket closed with code:', event.code);
+                        },
+                        close: function() {
+                            // Remove user from online users
+                            userRef.remove();
                             
-                            if (event.wasClean) {
-                                addSystemMessage('Disconnected from chat server. Please refresh the page to reconnect.');
-                            } else {
-                                // Connection error or abrupt close, switch to local mode
-                                addSystemMessage('WebSocket connection failed. Switching to local mode...');
-                                switchToLocalMode();
-                            }
-                        };
-                        
-                        ws.onerror = function(error) {
-                            clearTimeout(connectionTimeout);
-                            console.error('WebSocket error:', error);
-                            addSystemMessage('WebSocket error. Switching to local mode...');
-                            switchToLocalMode();
-                        };
-                        
-                        // Store the WebSocket object for sending messages
-                        socket = ws;
-                        
-                    } catch (error) {
-                        clearTimeout(connectionTimeout);
-                        console.error('Error creating WebSocket:', error);
-                        addSystemMessage(`WebSocket error: ${error.message || 'Unknown error'}. Switching to local mode...`);
-                        switchToLocalMode();
-                    }
+                            // Detach all Firebase listeners
+                            messagesRef.off();
+                            onlineUsersRef.off();
+                        }
+                    };
+                    
+                    // Keep user's "last active" timestamp updated
+                    setInterval(() => {
+                        if (socket.readyState === WebSocket.OPEN) {
+                            userRef.update({
+                                lastActive: firebase.database.ServerValue.TIMESTAMP
+                            });
+                        }
+                    }, 30000); // Every 30 seconds
+                    
+                } catch (error) {
+                    console.error('Error connecting to Firebase:', error);
+                    addSystemMessage(`Connection error: ${error.message || 'Unknown error'}`);
+                    switchToLocalMode();
                 }
             }
             
@@ -899,6 +973,9 @@
                             username: 'System',
                             timestamp: Date.now()
                         });
+                        
+                        // Add instructions for sharing with friends
+                        addSystemMessage('To chat with friends, make sure both of you are using the same HTML file and have internet access.');
                     }, 1500);
                 }, 1000);
             }
@@ -917,6 +994,10 @@
             function sendMessage() {
                 const messageText = messageInput.value.trim();
                 if (messageText && socket && socket.readyState === WebSocket.OPEN) {
+                    // Add a subtle animation to the send button
+                    sendBtn.classList.add('animate__animated', 'animate__bounceIn');
+                    setTimeout(() => sendBtn.classList.remove('animate__animated', 'animate__bounceIn'), 500);
+                    
                     const message = {
                         type: 'message',
                         text: messageText,
@@ -948,46 +1029,74 @@
                 const date = new Date(message.timestamp);
                 const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
+                // Add animation classes based on message type
+                if (message.userId === userId) {
+                    messageElement.classList.add('animate__animated', 'animate__fadeInRight');
+                } else {
+                    messageElement.classList.add('animate__animated', 'animate__fadeInLeft');
+                }
+                
                 messageElement.innerHTML = `
                     <div class="message-content">${escapeHtml(message.text)}</div>
                     <div class="message-info">
-                        ${message.userId !== userId ? escapeHtml(message.username) + ' • ' : ''}
-                        ${timeString}
+                        ${message.userId !== userId ? `<span class="message-author">${escapeHtml(message.username)}</span> • ` : ''}
+                        <span class="message-time">${timeString}</span>
                     </div>
                 `;
                 
                 chatMessages.appendChild(messageElement);
                 
-                // Scroll to bottom
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                // Scroll to bottom with smooth animation
+                chatMessages.scrollTo({
+                    top: chatMessages.scrollHeight,
+                    behavior: 'smooth'
+                });
                 
                 // Play a subtle sound for new messages
                 if (message.userId !== userId) {
                     playMessageSound();
                 }
+                
+                // Add a subtle animation to the message after it's added
+                setTimeout(() => {
+                    messageElement.classList.add('message-visible');
+                }, 100);
             }
             
             // Add a system message
             function addSystemMessage(text) {
                 const messageElement = document.createElement('div');
-                messageElement.className = 'message system';
+                messageElement.className = 'message system animate__animated animate__fadeInUp';
                 
                 const date = new Date();
                 const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
+                // Check if the message is about a user joining
+                const isJoinMessage = text.includes('joined the chat');
+                const isConnectedMessage = text.includes('Connected!');
+                const isErrorMessage = text.includes('error') || text.includes('Error') || text.includes('failed') || text.includes('⚠️');
+                
+                let iconClass = 'fas fa-info-circle';
+                if (isJoinMessage) iconClass = 'fas fa-user-plus';
+                else if (isConnectedMessage) iconClass = 'fas fa-plug';
+                else if (isErrorMessage) iconClass = 'fas fa-exclamation-triangle';
+                
                 messageElement.innerHTML = `
                     <div class="message-content">
-                        ${text}
+                        <i class="${iconClass} me-2"></i>${text}
                     </div>
                     <div class="message-info">
-                        ${timeString}
+                        <span class="message-time">${timeString}</span>
                     </div>
                 `;
                 
                 chatMessages.appendChild(messageElement);
                 
-                // Scroll to bottom
-                chatMessages.scrollTop = chatMessages.scrollHeight;
+                // Scroll to bottom with smooth animation
+                chatMessages.scrollTo({
+                    top: chatMessages.scrollHeight,
+                    behavior: 'smooth'
+                });
             }
             
             // Update online users count
@@ -1040,6 +1149,13 @@
             // Add a welcome message
             setTimeout(() => {
                 addSystemMessage('Welcome to the chat! Enter your name to join.');
+                
+                // Add a subtle animation to the login container
+                loginScreen.classList.add('animate__animated', 'animate__pulse');
+                setTimeout(() => loginScreen.classList.remove('animate__animated', 'animate__pulse'), 1000);
+                
+                // Focus on the username input
+                usernameInput.focus();
             }, 500);
         });
     </script>
